@@ -11,6 +11,7 @@ import com.steelextractor.extractors.GameRulesExtractor
 import com.steelextractor.extractors.Items
 import com.steelextractor.extractors.MenuTypes
 import com.steelextractor.extractors.Packets
+import com.steelextractor.extractors.LevelEvents
 import kotlinx.io.IOException
 import net.fabricmc.api.ModInitializer
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
@@ -49,7 +50,8 @@ object SteelExtractor : ModInitializer {
             Entities(),
             EntityDataSerializersExtractor(),
             GameRulesExtractor(),
-            Classes()
+            Classes(),
+            LevelEvents()
         )
 
         val outputDirectory: Path
