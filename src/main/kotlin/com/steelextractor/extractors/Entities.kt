@@ -17,6 +17,8 @@ import net.minecraft.world.entity.EntityAttachment
 import net.minecraft.world.entity.EntityType
 import net.minecraft.world.entity.LivingEntity
 import net.minecraft.world.entity.Pose
+import net.minecraft.world.entity.ai.attributes.Attributes
+import net.minecraft.world.entity.ai.attributes.DefaultAttributes
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon
 import org.slf4j.LoggerFactory
 import java.lang.reflect.Field
@@ -120,6 +122,14 @@ class Entities : SteelExtractor.Extractor {
 
                 // Synched data
                 entityTypeJson.add("synched_data", extractSynchedData(entityType, world))
+
+                // Attributes (for LivingEntities)
+                entityTypeJson.add("attributes", extractAttributes(entityType))
+
+                // Behavior flags
+                if (entity != null) {
+                    entityTypeJson.add("flags", extractBehaviorFlags(entity))
+                }
 
             } catch (e: Exception) {
                 logger.warn("Failed to get info for ${key?.path}: ${e.message}")
@@ -384,6 +394,87 @@ class Entities : SteelExtractor.Extractor {
         }
 
         return partsArray
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun extractAttributes(entityType: EntityType<*>): JsonObject? {
+        try {
+            // Only LivingEntities have attributes
+            val supplier = DefaultAttributes.getSupplier(entityType as EntityType<out LivingEntity>)
+            val attributesJson = JsonObject()
+
+            // List of all known attributes to check
+            val attributeHolders = listOf(
+                Attributes.MAX_HEALTH,
+                Attributes.FOLLOW_RANGE,
+                Attributes.KNOCKBACK_RESISTANCE,
+                Attributes.MOVEMENT_SPEED,
+                Attributes.FLYING_SPEED,
+                Attributes.ATTACK_DAMAGE,
+                Attributes.ATTACK_KNOCKBACK,
+                Attributes.ATTACK_SPEED,
+                Attributes.ARMOR,
+                Attributes.ARMOR_TOUGHNESS,
+                Attributes.LUCK,
+                Attributes.SPAWN_REINFORCEMENTS_CHANCE,
+                Attributes.JUMP_STRENGTH,
+                Attributes.GRAVITY,
+                Attributes.SAFE_FALL_DISTANCE,
+                Attributes.FALL_DAMAGE_MULTIPLIER,
+                Attributes.SCALE,
+                Attributes.STEP_HEIGHT,
+                Attributes.BLOCK_INTERACTION_RANGE,
+                Attributes.ENTITY_INTERACTION_RANGE,
+                Attributes.BLOCK_BREAK_SPEED,
+                Attributes.MINING_EFFICIENCY,
+                Attributes.SNEAKING_SPEED,
+                Attributes.SUBMERGED_MINING_SPEED,
+                Attributes.SWEEPING_DAMAGE_RATIO,
+                Attributes.OXYGEN_BONUS,
+                Attributes.WATER_MOVEMENT_EFFICIENCY,
+                Attributes.BURNING_TIME,
+                Attributes.EXPLOSION_KNOCKBACK_RESISTANCE,
+                Attributes.MOVEMENT_EFFICIENCY,
+                Attributes.TEMPT_RANGE
+            )
+
+            for (holder in attributeHolders) {
+                try {
+                    if (supplier.hasAttribute(holder)) {
+                        val baseValue = supplier.getBaseValue(holder)
+                        val key = holder.unwrapKey().orElse(null)?.identifier()?.path ?: continue
+                        attributesJson.addProperty(key, baseValue)
+                    }
+                } catch (_: Exception) {
+                    // Attribute not present for this entity type
+                }
+            }
+
+            return if (attributesJson.size() > 0) attributesJson else null
+        } catch (_: Exception) {
+            // Not a LivingEntity or doesn't have attributes
+            return null
+        }
+    }
+
+    private fun extractBehaviorFlags(entity: Entity): JsonObject {
+        val flagsJson = JsonObject()
+
+        flagsJson.addProperty("is_pushable", entity.isPushable)
+        flagsJson.addProperty("is_attackable", entity.isAttackable)
+        flagsJson.addProperty("is_pickable", entity.isPickable)
+        flagsJson.addProperty("can_be_collided_with", entity.canBeCollidedWith(null))
+        flagsJson.addProperty("is_pushed_by_fluid", entity.isPushedByFluid())
+        flagsJson.addProperty("can_freeze", entity.canFreeze())
+        flagsJson.addProperty("can_be_hit_by_projectile", entity.canBeHitByProjectile())
+
+        if (entity is LivingEntity) {
+            flagsJson.addProperty("is_sensitive_to_water", entity.isSensitiveToWater)
+            flagsJson.addProperty("can_breathe_underwater", entity.canBreatheUnderwater())
+            flagsJson.addProperty("can_be_seen_as_enemy", entity.canBeSeenAsEnemy())
+        }
+
+        return flagsJson
     }
 
     private fun serializeDefaultValue(value: Any?): JsonElement {
