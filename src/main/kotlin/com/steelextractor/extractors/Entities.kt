@@ -92,9 +92,6 @@ class Entities : SteelExtractor.Extractor {
                     null
                 }
 
-                // Extract pose-specific dimensions (for entities that have different sizes per pose)
-                entityTypeJson.add("pose_dimensions", extractPoseDimensions(entity, entityType, world))
-
                 // Extract baby dimensions for ageable entities
                 if (entity is LivingEntity) {
                     entityTypeJson.add("baby_dimensions", extractBabyDimensions(entity))
@@ -118,6 +115,7 @@ class Entities : SteelExtractor.Extractor {
                 // Flags
                 entityTypeJson.addProperty("fire_immune", entityType.fireImmune())
                 entityTypeJson.addProperty("summonable", entityType.canSummon())
+                entityTypeJson.addProperty("can_serialize", entityType.canSerialize())
                 entityTypeJson.addProperty("can_spawn_far_from_player", entityType.canSpawnFarFromPlayer())
 
                 // Synched data
@@ -291,51 +289,6 @@ class Entities : SteelExtractor.Extractor {
         }
 
         return attachmentsJson
-    }
-
-    private fun extractPoseDimensions(
-        entity: Entity?,
-        entityType: EntityType<*>,
-        world: net.minecraft.server.level.ServerLevel
-    ): JsonObject {
-        val poseDimensionsJson = JsonObject()
-        val defaultDimensions = entityType.dimensions
-
-        // For player, create a fake player to get dimensions
-        val effectiveEntity = entity ?: if (entityType == EntityType.PLAYER) {
-            createFakeServerPlayer(world.server)
-        } else {
-            null
-        }
-
-        if (effectiveEntity != null) {
-            for (pose in Pose.entries) {
-                try {
-                    val poseDimensions = effectiveEntity.getDimensions(pose)
-
-                    // Only include if different from default
-                    if (poseDimensions.width() != defaultDimensions.width() ||
-                        poseDimensions.height() != defaultDimensions.height() ||
-                        poseDimensions.eyeHeight() != defaultDimensions.eyeHeight()
-                    ) {
-                        val poseJson = JsonObject()
-                        poseJson.addProperty("width", poseDimensions.width())
-                        poseJson.addProperty("height", poseDimensions.height())
-                        poseJson.addProperty("eye_height", poseDimensions.eyeHeight())
-                        poseDimensionsJson.add(pose.name.lowercase(), poseJson)
-                    }
-                } catch (_: Exception) {
-                    // Some poses may not be valid for certain entities
-                }
-            }
-
-            // Clean up fake player if we created one
-            if (entity == null && effectiveEntity is ServerPlayer) {
-                effectiveEntity.discard()
-            }
-        }
-
-        return poseDimensionsJson
     }
 
     private fun extractBabyDimensions(entity: LivingEntity): JsonObject? {
