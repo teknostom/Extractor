@@ -7,6 +7,8 @@ import com.steelextractor.SteelExtractor
 import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.server.MinecraftServer
 import net.minecraft.world.item.BlockItem
+import net.minecraft.world.item.StandingAndWallBlockItem
+import net.minecraft.world.level.block.Block
 import net.minecraft.world.level.block.LiquidBlock
 import org.slf4j.LoggerFactory
 
@@ -49,6 +51,12 @@ class Classes : SteelExtractor.Extractor {
 
             if (item is BlockItem) {
                 itemJson.addProperty("block", BuiltInRegistries.BLOCK.getKey(item.block)?.path)
+            }
+            if (item is StandingAndWallBlockItem) {
+                itemJson.addProperty(
+                    "wallBlock",
+                    BuiltInRegistries.BLOCK.getKey(item.javaClass.getField("wallBlock").get(item) as Block)?.path
+                )
             }
 
             itemsJson.add(itemJson)
