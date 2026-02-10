@@ -35,17 +35,14 @@ public class ChunkStepMixin {
             return;
         }
 
-        if (!BLOCK_MODIFYING_STAGES.contains(this.targetStatus)) {
-            return;
+        if (BLOCK_MODIFYING_STAGES.contains(this.targetStatus)) {
+            LevelChunkSection[] sections = chunk.getSections();
+            String hash = ChunkStageHashStorage.INSTANCE.computeBlockHash(java.util.Arrays.asList(sections));
+            ChunkStageHashStorage.INSTANCE.storeHash(chunk.getPos(), this.targetStatus.toString(), hash);
         }
 
-        LevelChunkSection[] sections = chunk.getSections();
-        String hash = ChunkStageHashStorage.INSTANCE.computeBlockHash(java.util.Arrays.asList(sections));
-
-        ChunkStageHashStorage.INSTANCE.storeHash(
-            chunk.getPos(),
-            this.targetStatus.toString(),
-            hash
-        );
+        if (this.targetStatus == ChunkStatus.FEATURES) {
+            ChunkStageHashStorage.INSTANCE.markReady(chunk.getPos());
+        }
     }
 }

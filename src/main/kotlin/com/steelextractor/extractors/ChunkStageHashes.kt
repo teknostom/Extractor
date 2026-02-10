@@ -36,7 +36,7 @@ class ChunkStageHashes : SteelExtractor.Extractor {
             chunkJson.addProperty("z", pos.z)
 
             val stagesJson = JsonObject()
-            for ((key, hash) in entries) {
+            for ((key, hash) in entries.sortedBy { it.key.second }) {
                 val stageName = key.second
                 stagesJson.addProperty(stageName, hash)
             }

@@ -18,9 +18,11 @@ import com.steelextractor.extractors.OverworldBiomes
 import com.steelextractor.extractors.BiomeHashes
 import com.steelextractor.extractors.ChunkStageHashes
 import net.minecraft.world.level.ChunkPos
+import net.minecraft.world.level.chunk.status.ChunkStatus
 import kotlinx.io.IOException
 import net.fabricmc.api.ModInitializer
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents
 import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.server.MinecraftServer
 import org.slf4j.LoggerFactory
@@ -33,13 +35,10 @@ import kotlin.system.measureTimeMillis
 
 object SteelExtractor : ModInitializer {
     private val logger = LoggerFactory.getLogger("steel-extractor")
+    private const val TRACKING_RADIUS = 5
 
     override fun onInitialize() {
-        // This code runs as soon as Minecraft is in a mod-load-ready state.
-        // However, some things (like resources) may still be uninitialized.
-        // Proceed with mild caution.
         logger.info("Hello Fabric world!")
-
 
         val test = BuiltInRegistries.BLOCK.byId(5);
         logger.info(test.toString())
@@ -47,7 +46,7 @@ object SteelExtractor : ModInitializer {
         val test2 = BuiltInRegistries.FLUID.byId(2)
         logger.info(test2.toString())
 
-        val extractors = arrayOf(
+        val immediateExtractors = arrayOf(
             Blocks(),
             BlockEntities(),
             Items(),
@@ -61,20 +60,20 @@ object SteelExtractor : ModInitializer {
             SoundEvents(),
             SoundTypes(),
             OverworldBiomes(),
-            BiomeHashes(),
-            ChunkStageHashes()
+            BiomeHashes()
         )
 
-        // Set up chunk stage hash tracking before chunks are generated
-        val trackingRadius = 5
-        ServerLifecycleEvents.SERVER_STARTING.register { server ->
-            logger.info("Setting up chunk stage hash tracking (radius=$trackingRadius)")
-            // Track chunks in a radius around spawn (0,0)
-            for (x in -trackingRadius..trackingRadius) {
-                for (z in -trackingRadius..trackingRadius) {
-                    ChunkStageHashStorage.startTracking(ChunkPos(x, z))
+        val chunkStageExtractor = ChunkStageHashes()
+
+        ServerLifecycleEvents.SERVER_STARTING.register { _ ->
+            logger.info("Setting up chunk stage hash tracking (radius=$TRACKING_RADIUS)")
+            val chunksToTrack = mutableSetOf<ChunkPos>()
+            for (x in -TRACKING_RADIUS..TRACKING_RADIUS) {
+                for (z in -TRACKING_RADIUS..TRACKING_RADIUS) {
+                    chunksToTrack.add(ChunkPos(x, z))
                 }
             }
+            ChunkStageHashStorage.startTracking(chunksToTrack)
         }
 
         val outputDirectory: Path
@@ -89,7 +88,7 @@ object SteelExtractor : ModInitializer {
 
         ServerLifecycleEvents.SERVER_STARTED.register(ServerLifecycleEvents.ServerStarted { server: MinecraftServer ->
             val timeInMillis = measureTimeMillis {
-                for (ext in extractors) {
+                for (ext in immediateExtractors) {
                     try {
                         val out = outputDirectory.resolve(ext.fileName())
                         val fileWriter = FileWriter(out.toFile(), StandardCharsets.UTF_8)
@@ -101,9 +100,42 @@ object SteelExtractor : ModInitializer {
                     }
                 }
             }
-            logger.info("Done, took ${timeInMillis}ms")
+            logger.info("Immediate extractors done, took ${timeInMillis}ms")
+            logger.info("Forcing generation of ${(TRACKING_RADIUS * 2 + 1) * (TRACKING_RADIUS * 2 + 1)} chunks...")
+
+            val overworld = server.overworld()
+            for (x in -TRACKING_RADIUS..TRACKING_RADIUS) {
+                for (z in -TRACKING_RADIUS..TRACKING_RADIUS) {
+                    overworld.getChunk(x, z, ChunkStatus.FULL, true)
+                }
+            }
+            logger.info("Chunk generation forced, waiting for completion...")
         })
 
+        var tickCount = 0
+        var chunkExtractorDone = false
+        ServerTickEvents.END_SERVER_TICK.register { server ->
+            if (chunkExtractorDone) return@register
+
+            tickCount++
+            if (tickCount % 100 == 0) {
+                logger.info("Waiting for chunks (${ChunkStageHashStorage.getReadyCount()}/${ChunkStageHashStorage.getTrackedCount()} ready)...")
+            }
+
+            if (ChunkStageHashStorage.getReadyCount() >= ChunkStageHashStorage.getTrackedCount()) {
+                chunkExtractorDone = true
+                try {
+                    val out = outputDirectory.resolve(chunkStageExtractor.fileName())
+                    val fileWriter = FileWriter(out.toFile(), StandardCharsets.UTF_8)
+                    gson.toJson(chunkStageExtractor.extract(server), fileWriter)
+                    fileWriter.close()
+                    logger.info("Wrote " + out.toAbsolutePath())
+                } catch (e: java.lang.Exception) {
+                    logger.error("Extractor for \"${chunkStageExtractor.fileName()}\" failed.", e)
+                }
+                logger.info("All extractors complete!")
+            }
+        }
     }
 
     interface Extractor {
