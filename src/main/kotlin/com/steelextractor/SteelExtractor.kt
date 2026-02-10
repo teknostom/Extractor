@@ -14,6 +14,10 @@ import com.steelextractor.extractors.Packets
 import com.steelextractor.extractors.LevelEvents
 import com.steelextractor.extractors.SoundEvents
 import com.steelextractor.extractors.SoundTypes
+import com.steelextractor.extractors.OverworldBiomes
+import com.steelextractor.extractors.BiomeHashes
+import com.steelextractor.extractors.ChunkStageHashes
+import net.minecraft.world.level.ChunkPos
 import kotlinx.io.IOException
 import net.fabricmc.api.ModInitializer
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
@@ -55,8 +59,23 @@ object SteelExtractor : ModInitializer {
             Classes(),
             LevelEvents(),
             SoundEvents(),
-            SoundTypes()
+            SoundTypes(),
+            OverworldBiomes(),
+            BiomeHashes(),
+            ChunkStageHashes()
         )
+
+        // Set up chunk stage hash tracking before chunks are generated
+        val trackingRadius = 5
+        ServerLifecycleEvents.SERVER_STARTING.register { server ->
+            logger.info("Setting up chunk stage hash tracking (radius=$trackingRadius)")
+            // Track chunks in a radius around spawn (0,0)
+            for (x in -trackingRadius..trackingRadius) {
+                for (z in -trackingRadius..trackingRadius) {
+                    ChunkStageHashStorage.startTracking(ChunkPos(x, z))
+                }
+            }
+        }
 
         val outputDirectory: Path
         try {
